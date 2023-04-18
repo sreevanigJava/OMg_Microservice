@@ -1,0 +1,189 @@
+package com.orderService.service;
+
+import java.io.IOException;
+import java.time.LocalDate;
+import java.util.List;
+
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.log4j.Logger;
+import org.joda.time.DateTime;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.lowagie.text.Cell;
+import com.lowagie.text.Document;
+import com.lowagie.text.DocumentException;
+import com.lowagie.text.Font;
+import com.lowagie.text.FontFactory;
+import com.lowagie.text.Header;
+import com.lowagie.text.Image;
+import com.lowagie.text.PageSize;
+import com.lowagie.text.Paragraph;
+import com.lowagie.text.Table;
+import com.lowagie.text.pdf.PdfWriter;
+import com.orderService.dao.OrdersDao;
+import com.orderService.dao.RegistrationDao;
+import com.orderService.entity.AddressEntity;
+import com.orderService.entity.Inventory;
+import com.orderService.entity.MyCart;
+import com.orderService.entity.MyCartLists;
+import com.orderService.entity.OrdersEntity;
+import com.orderService.entity.ProductsEntity;
+import com.orderService.entity.RegistrationEntity;
+import com.orderService.exception.CustomException;
+import com.orderService.feign.CartFeign;
+import com.orderService.feign.InventoryFeign;
+import com.orderService.feign.ProductFeign;
+import com.orderService.feign.ProfileFeign;
+
+@Service
+public class UserDashBoardServiceImpl implements UserDashBoardService {
+
+	@Autowired
+	OrdersDao ordersDao;
+	@Autowired
+	RegistrationDao registrationDao;
+	@Autowired
+	ProfileFeign profileFeign;
+	@Autowired
+	CartFeign cartFeign;
+	@Autowired
+	InventoryFeign inventoryFeign;
+	@Autowired
+	ProductFeign productFeign;
+	private static Logger logger = Logger.getLogger(UserDashBoardServiceImpl.class);
+	public OrdersEntity placeAOrder(String userName, OrdersEntity entity) {
+
+		logger.info("Place order method start..");
+		entity.setUserName(userName);
+		entity.setOrderDate(LocalDate.now());
+
+		List<AddressEntity> addressEntity = profileFeign.getMyAddress();
+		// adding an address to orders which is default address
+		for (AddressEntity adEntity : addressEntity) {
+			if (adEntity.isCurrentAddress()) {
+				entity.setAddressEntity(adEntity);
+			}
+		}
+		MyCartLists myCartLists = cartFeign.findByUserName();
+		// setting myCarlist to orders entity
+		entity.setCartList(myCartLists);
+		DateTime date = new DateTime();
+		date = date.plusHours(4);// d
+		String stringDate = date.toString();// d
+
+		entity.setDeliveryTime(stringDate.substring(11, 19) + " Date: " + stringDate.substring(0, 10));// d
+		entity.setPaymentMode("Cash On Delivery");
+		entity.setPaymentStatus("Not Paid");
+
+		logger.info("Place order method end..");
+		List<MyCart> cartList = entity.getCartList().getMyCartItems();
+		OrdersEntity ordersEntity = ordersDao.save(entity);
+		for (int i = 0; i < cartList.size(); i++) {
+
+			MyCart cart = cartList.get(i);
+			String orderProductId = cart.getEntity().getProdId();
+			// System.out.println(orderProductName + ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+			long orderQuantity = cart.getQty();
+			Inventory inventory = inventoryFeign.getInventory();
+			long remainingQty = 0;
+			if (inventory.getQuantity() >= orderQuantity) {
+				remainingQty = inventory.getQuantity() - orderQuantity;
+			} else
+				throw new CustomException("Given order quantity is beyond our current stock!!");
+			if (remainingQty == 0) {
+				ProductsEntity prodEntity = productFeign.getProdById(orderProductId);
+				prodEntity.setStatus("Not Available");
+			}
+
+			inventory.setQuantity(remainingQty);
+			inventoryFeign.updateInventory(inventory);
+		}
+		logger.info("Place order method end>>>>>");
+		System.out.println(myCartLists + ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+		cartFeign.delete(myCartLists);
+		return ordersEntity;
+	}
+	@Override
+	public void geratePdf(HttpServletResponse response, String orderId) throws DocumentException, IOException {
+		logger.info("Generate pdf method start..");
+		if (!(ordersDao.existsByOrderId(orderId))) {
+			throw new CustomException("Order not found");
+		}
+		OrdersEntity ordersEntityList = ordersDao.findByOrderId(orderId);
+		RegistrationEntity registrationEntity = registrationDao.findByUserName(ordersEntityList.getUserName());
+
+		AddressEntity addressEntity = ordersEntityList.getAddressEntity();
+		MyCartLists cartList = ordersEntityList.getCartList();
+
+		Document document = new Document(PageSize.A4);
+		PdfWriter.getInstance(document, response.getOutputStream());
+
+		Image image = Image.getInstance("omg.jpg");
+		image.scaleAbsolute(120, 40);
+		image.setAlignment(50);
+
+		document.open();
+		Font fontTitle = FontFactory.getFont(FontFactory.HELVETICA_BOLDOBLIQUE);
+		fontTitle.setSize(18);
+		fontTitle.setColor(19, 124, 50);
+
+		Header header = new Header("Invoice", "0");
+
+		Paragraph paragraph = new Paragraph("Invoice #6006922 for Order # BPFVO­6012102­211215 : www.omg.com");
+		paragraph.setAlignment(Paragraph.ALIGN_CENTER);
+
+		Font fontParagraph = FontFactory.getFont(FontFactory.HELVETICA);
+		fontParagraph.setSize(12);
+		// fontParagraph.setColor(206,33,33);
+
+		Paragraph paragraph2 = new Paragraph("Invoice", fontTitle);
+		paragraph2.setSpacingAfter(2f);
+		paragraph2.setAlignment(Paragraph.ALIGN_CENTER);
+
+		Paragraph paragraph4 = new Paragraph("Delivery Location :");
+		Paragraph paragraph5 = new Paragraph(
+				registrationEntity.getFirstName() + " " + registrationEntity.getLastName());
+		Paragraph paragraph6 = new Paragraph(addressEntity.getHouseNumber() + "," + addressEntity.getLandmark());
+		Paragraph paragraph7 = new Paragraph(addressEntity.getState() + "," + addressEntity.getPincode());
+
+		Paragraph paragraph3 = new Paragraph("Order ID", fontParagraph);
+
+		Table table = new Table(2, 6);
+		table.setAlignment(5);
+		table.setBorder(2);
+		table.setPadding(3);
+		Cell cell = new Cell("Invoice No");
+		table.addCell(cell);
+		table.addCell(String.valueOf(ordersEntityList.getOrderId()));
+		table.addCell(paragraph3);
+		table.addCell(String.valueOf(ordersEntityList.getOrderId()));
+		table.addCell("Delivery Time");
+		table.addCell(ordersEntityList.getDeliveryTime());
+		table.addCell(new Paragraph("Final Total", fontParagraph));
+		table.addCell(String.valueOf(cartList.getTotalCost()) + " INR");
+		table.addCell("Payment By");
+		table.addCell(ordersEntityList.getPaymentMode());
+		table.addCell("Amount payable");
+		table.addCell(String.valueOf(cartList.getTotalCost()) + " rs");
+//		table.addCell("No.of items");
+//		table.addCell("13");
+
+		document.add(paragraph);
+		document.add(paragraph2);
+		document.add(image);
+		document.add(paragraph4);
+		document.add(paragraph5);
+		document.add(paragraph6);
+		document.add(paragraph7);
+		document.add(table);
+
+		document.close();
+
+		logger.info("End of generate pdf..");
+	
+		
+	}
+
+}

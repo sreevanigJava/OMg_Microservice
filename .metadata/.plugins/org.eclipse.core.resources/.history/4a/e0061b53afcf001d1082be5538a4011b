@@ -1,0 +1,13 @@
+package com.orderService.service;
+
+import javax.servlet.http.HttpServletResponse;
+
+import com.orderService.entity.OrdersEntity;
+
+public interface UserDashBoardService {
+
+	 OrdersEntity placeAOrder(String userName, OrdersEntity entity);
+
+	void geratePdf(HttpServletResponse response, String ordersId);
+
+}

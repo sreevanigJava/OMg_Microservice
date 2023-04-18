@@ -1,0 +1,4 @@
+server.port=8006
+spring.application.name=packingService
+spring.config.import=optional:configserver:http://localhost:8888
+

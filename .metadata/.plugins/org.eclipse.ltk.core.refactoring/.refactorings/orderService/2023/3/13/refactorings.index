@@ -1,0 +1,13 @@
+1680240981614	Delete element
+1680240986917	Delete element
+1680241620099	Delete elements
+1680246498648	Rename package 'com.inventoryService'
+1680246550069	Rename package 'com.inventoryService.controller'
+1680246563985	Rename package 'com.inventoryService.dao'
+1680246573465	Rename package 'com.inventoryService.dto'
+1680246583925	Rename package 'com.inventoryService.entity'
+1680246613044	Rename package 'com.inventoryService.exception'
+1680246626303	Rename package 'com.inventoryService.feign'
+1680246638089	Rename package 'com.inventoryService.idGenerator'
+1680246658127	Rename package 'com.inventoryService.service'
+1680259089310	Delete element

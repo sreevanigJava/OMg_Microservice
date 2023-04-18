@@ -1,0 +1,5 @@
+server.port=8006
+spring.application.name=profileService
+spring.config.import=optional:configserver:http://localhost:8888
+
+

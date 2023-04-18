@@ -1,0 +1,4 @@
+server.port=8004
+spring.application.name=cartService
+spring.config.import=optional:configserver:http://localhost:8888
+
